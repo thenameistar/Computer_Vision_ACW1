@@ -1,7 +1,7 @@
 Traffic Sign Detection Results
 ========================================
-Image Processed: acw1_test_images/test_01.jpg
-Red contours detected: 1
-Blue contours detected: 0
-White contours detected: 3
+image processed: acw1_test_images/test_01.jpg
+red contours detected: 1
+blue contours detected: 0
+white contours detected: 3
 ========================================
