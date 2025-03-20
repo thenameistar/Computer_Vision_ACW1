@@ -3,8 +3,11 @@ import os
 import image_processing
 import video_processing
 
+DEBUG = True  # Set to False to reduce console output
+
 def main():
-    print("✅ Script started")  # Verifying execution
+    if DEBUG:
+        print("✅ Script started")  # Verifying execution
 
     parser = argparse.ArgumentParser(description="Traffic Sign Detection")
     parser.add_argument("--image", help="Path to a single image file")
@@ -12,7 +15,11 @@ def main():
     parser.add_argument("--video", help="Path to a video file (or 'webcam' for live feed)")
     parser.add_argument("--output", help="Path to output file for detection results", default="output.txt")
 
-    args = parser.parse_args()
+    args = parser.parse_args()  # ✅ FIX: Parse arguments first
+
+    # Ensure output file is set correctly
+    if not args.output:
+        args.output = "output.txt"
 
     # Ensure output file is cleared before writing new results
     with open(args.output, "w") as file:
