@@ -4,14 +4,12 @@ import numpy as np
 from image_utils import (
     normalise_brightness,
     detect_red_signs,
-    find_sign_contours,
     identify_sign,
-    detect_shape
+    detect_shape,
+    find_sign_contours
 )
 
-DEBUG = True  # Set to False to disable debugging
-
-def process_single_image(image_path, output_filename, visualize=False):
+def process_single_image(image_path, output_filename):
     print(f"\n📂 Processing image: {image_path}")
 
     # Load Image
@@ -23,23 +21,21 @@ def process_single_image(image_path, output_filename, visualize=False):
 
     # Step 1: Normalize Brightness
     normalized_image = normalise_brightness(image)
-
-    if DEBUG:
-        cv2.imshow("Debug - Normalized Brightness", normalized_image)
-        cv2.waitKey(0)
+    cv2.imshow("Debug - Normalized Brightness", normalized_image)
+    cv2.waitKey(0)
 
     # Step 2: Detect Red Signs (HSV Masking)
     red_mask = detect_red_signs(normalized_image)  # FIXED ✅
-    
-    if DEBUG:
-        cv2.imshow("Debug - Raw Red Mask", red_mask)
-        cv2.waitKey(0)
+    cv2.imshow("Debug - Raw Red Mask", red_mask)
+    cv2.waitKey(0)
 
     # Step 3: Find & Filter Contours
-    valid_contours = find_sign_contours(red_mask, min_area=300, max_area=100000)
+    expect_circular = True  # Set dynamically if needed
+    valid_contours = find_sign_contours(red_mask, min_area=300, max_area=100000, enforce_circle=expect_circular)
+
     if not valid_contours:
         print("⚠️ No valid contours detected.")
-        return
+        return      
     
     # Step 4: Identify Shapes & Recognize Signs
     for idx, cnt in enumerate(valid_contours):
@@ -56,19 +52,19 @@ def process_single_image(image_path, output_filename, visualize=False):
             bb_ycentre = (y + h / 2) / img_height
             bb_width = w / img_width
             bb_height = h / img_height
-
+            
             # Save Output to File
             with open(output_filename, "a") as file:
-                file.write(f"{image_path}, {idx}, {sign_name}, {bb_xcentre:.6f}, {bb_ycentre:.6f}, {bb_width:.6f}, {bb_height:.6f}, 0, 0, 1.0\n")
+                file.write(f"{image_path}, {sign_number}, {sign_name}, {bb_xcentre:.6f}, {bb_ycentre:.6f}, {bb_width:.6f}, {bb_height:.6f}, 0, 0.0, 1.0\n")
 
-            # Visualize Detected Bounding Boxes (Only If `visualize=True`)
-            if visualize or DEBUG:
-                cv2.rectangle(image, (x, y), (x + w, y + h), (0, 255, 0), 2)
-                cv2.putText(image, f"{sign_name}", (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
-               
-    if visualize or DEBUG:
-        cv2.imshow("Final Detections", image)
-        cv2.waitKey(0)
-        cv2.destroyAllWindows()
+            # Draw Bounding Box and Show Image
+            cv2.rectangle(image, (x, y), (x + w, y + h), (0, 255, 0), 2)
+            cv2.putText(image, f"{sign_name}", (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+
+    # ✅ Display the final detected image and **keep it open until user closes**
+    cv2.imshow("Final Detections", image)
+    print("✅ Press any key to close the image window.")
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
 
     print("✅ Image processing complete.")
