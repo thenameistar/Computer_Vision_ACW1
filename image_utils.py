@@ -1,19 +1,7 @@
 import cv2
 import numpy as np
-
-sift = cv2.SIFT_create()
-
-def compute_descriptors(image_path):
-    image = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
-    keypoints, descriptors = sift.detectAndCompute(image, None)
-    return keypoints, descriptors
-
-# Example templates
-templates = {
-    "double bend": compute_descriptors("templates/double_bend.jpg"),
-    "roadworks": compute_descriptors("templates/roadworks.jpg"),
-    "ducks": compute_descriptors("templates/ducks.jpg"),
-}
+from skimage.feature import graycomatrix, graycoprops
+import os
 
 # Mapping of detected signs to assigned numbers
 SIGN_NUMBERS = {
@@ -38,11 +26,24 @@ SIGN_NUMBERS = {
     "national speed limit": 19
 }
 
+# Load templates at module level
+TEMPLATES = []
+sift = cv2.SIFT_create()
+TEMPLATE_DIR = os.path.join(os.path.dirname(__file__), "templates")
+
+for filename in os.listdir(TEMPLATE_DIR):
+    if filename.lower().endswith((".jpg", ".jpeg", ".png")):
+        path = os.path.join(TEMPLATE_DIR, filename)
+        image = cv2.imread(path)
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        kp, des = sift.detectAndCompute(gray, None)
+        label = os.path.splitext(filename)[0]
+        TEMPLATES.append((label, kp, des, gray))
+
 def normalise_brightness(image):
-    """Normalizes brightness using histogram equalization."""
     hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
     avg_brightness = np.mean(hsv[:, :, 2])
-    print(f"🔆 Average brightness before: {avg_brightness:.2f}")
+    print(f"🔆 average brightness before: {avg_brightness:.2f}")
 
     if avg_brightness < 80:
         hsv[:, :, 2] = cv2.equalizeHist(hsv[:, :, 2])
@@ -50,102 +51,135 @@ def normalise_brightness(image):
         hsv[:, :, 2] = np.clip(hsv[:, :, 2] * 0.8, 0, 255).astype(np.uint8)
 
     result = cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
-    print("✅ Brightness normalized.")
-
-    # Always show debug image
-    cv2.imshow("Brightness Adjustment", result)
-    cv2.waitKey(0)
+    print("✅ brightness normalised.")
 
     return result
 
 def detect_colour_signs(image):
-    """Detects red regions in an image using HSV color space with adaptive thresholding and preprocessing."""
-    
-    # Step 1: Convert to HSV and Normalize Brightness
     hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
-    v_channel = hsv[:, :, 2]  # Brightness channel
-    avg_brightness = np.mean(v_channel)
 
-    print(f"🔆 Image Brightness: {avg_brightness:.2f}")
-   
+    # --- Red Mask ---
     lower_red1 = np.array([0, 70, 50])
     upper_red1 = np.array([10, 255, 255])
     lower_red2 = np.array([170, 70, 50])
     upper_red2 = np.array([180, 255, 255])
+    red_mask = cv2.inRange(hsv, lower_red1, upper_red1) + cv2.inRange(hsv, lower_red2, upper_red2)
 
-    mask1 = cv2.inRange(hsv, lower_red1, upper_red1)
-    mask2 = cv2.inRange(hsv, lower_red2, upper_red2)
-    red_mask = cv2.bitwise_or(mask1, mask2)
+    # --- Blue Mask ---
+    lower_blue1 = np.array([100, 100, 50])
+    upper_blue1 = np.array([130, 255, 255])
+    lower_blue2 = np.array([85, 30, 30])
+    upper_blue2 = np.array([145, 255, 255])
+    blue_mask1 = cv2.inRange(hsv, lower_blue1, upper_blue1)
+    blue_mask2 = cv2.inRange(hsv, lower_blue2, upper_blue2)
+    blue_mask = cv2.bitwise_or(blue_mask1, blue_mask2)
 
-   # ==== BLUE MASK ====
-    lower_blue = np.array([90, 50, 50])
-    upper_blue = np.array([140, 255, 255])
-    blue_mask = cv2.inRange(hsv, lower_blue, upper_blue)
-
-    # ==== Combine Both Masks ====
-    combined_mask = cv2.bitwise_or(red_mask, blue_mask)
-
-    # ==== Morphological Cleaning ====
+    # --- Apply same morphological filtering to both ---
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
-    combined_mask = cv2.morphologyEx(combined_mask, cv2.MORPH_CLOSE, kernel)
-    combined_mask = cv2.morphologyEx(combined_mask, cv2.MORPH_OPEN, kernel)
-    combined_mask = cv2.medianBlur(combined_mask, 5)
+    def clean_mask(mask, min_area=600):
+        # Erode and dilate to reduce noise
+        mask = cv2.erode(mask, kernel, iterations=1)
+        mask = cv2.dilate(mask, kernel, iterations=2)
 
-    # ==== Debug View ====
-    cv2.imshow("Debug - Combined Red + Blue Mask", combined_mask)
+        # Filter by contour area
+        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        cleaned_mask = np.zeros_like(mask)
+        for cnt in contours:
+            if cv2.contourArea(cnt) > min_area:
+                cv2.drawContours(cleaned_mask, [cnt], -1, 255, thickness=cv2.FILLED)
+        return cleaned_mask
+
+    red_clean = clean_mask(red_mask)
+    blue_clean = clean_mask(blue_mask)
+    cv2.imshow("Red Mask Cleaned", red_clean)
+    cv2.imshow("Blue Mask Cleaned", blue_clean)
     cv2.waitKey(0)
 
-    return combined_mask
+    return red_clean, blue_clean
+
+def extract_glcm_features(image_gray):
+    """
+    Extracts GLCM texture features from grayscale image.
+    Returns contrast, correlation, energy, and homogeneity.
+    """
+    glcm = graycomatrix(image_gray, distances=[1], angles=[0], levels=256, symmetric=True, normed=True)
+    contrast = graycoprops(glcm, 'contrast')[0, 0]
+    correlation = graycoprops(glcm, 'correlation')[0, 0]
+    energy = graycoprops(glcm, 'energy')[0, 0]
+    homogeneity = graycoprops(glcm, 'homogeneity')[0, 0]
+    return contrast, correlation, energy, homogeneity
 
 def detect_shape(contour, image):
-    """Determines the shape of a detected sign based on contour approximation, circularity, and HoughCircles."""
-    
-    # Convert to grayscale and blur for better edge detection
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     blurred = cv2.GaussianBlur(gray, (5, 5), 0)
 
-    # Get bounding box and aspect ratio
     x, y, w, h = cv2.boundingRect(contour)
     aspect_ratio = w / float(h)
 
-    # **Step 1: Calculate Circularity**
     area = cv2.contourArea(contour)
     perimeter = cv2.arcLength(contour, True)
     circularity = (4 * np.pi * area) / (perimeter ** 2) if perimeter > 0 else 0
 
-    # Step 2: Debugging Info (🔍 use this to understand why shapes fail)
+    # 🔐 Solidity check
+    hull_area = cv2.contourArea(cv2.convexHull(contour))
+    solidity = area / hull_area if hull_area > 0 else 0
+
+    # 🔎 Filter small/noisy shapes early
+    if area < 200 or solidity < 0.6:
+        print(f"⚠️ Ignored: Area {area:.1f}, Solidity {solidity:.2f}")
+        return "unknown"
+
     approx = cv2.approxPolyDP(contour, 0.02 * perimeter, True)
     num_sides = len(approx)
     print(f"➕ Shape Metrics → Sides: {num_sides}, Circ: {circularity:.2f}, AR: {aspect_ratio:.2f}")
+        
+    if 0.3 < circularity < 0.6 and 0.7 < aspect_ratio < 1.3:
+        return "circle" 
 
-    # Step 3: Hough Circle Detection
-    if 0.8 < aspect_ratio < 1.2 and circularity > 0.5:
-        circles = cv2.HoughCircles(
-            blurred, cv2.HOUGH_GRADIENT, dp=1.2, minDist=30,
-            param1=80, param2=35, minRadius=20, maxRadius=150
-        )
-        if circles is not None:
-            return "circle"
-
-    # Step 4: Octagon
     if num_sides == 8 and 0.65 < circularity < 0.85:
         return "octagon"
 
-    # Step 5: Triangle (relaxed detection for triangle-shaped warning signs)
-    if 3 <= num_sides <= 7 and 0.3 < circularity < 0.65 and 0.8 < aspect_ratio < 1.4:
+    if 3 <= num_sides <= 14 and 0.2 < circularity < 0.7 and 0.2 < aspect_ratio < 1.6:
         return "triangle"
 
-    # Step 6: Rectangle
     if 4 <= num_sides <= 6:
         return "rectangle"
 
     return "unknown"
+
+def get_stats(roi, L=256):
+    """
+    Calculate statistical texture features for a given region of interest (roi)
+    roi: 2D numpy array (grayscale image)
+    L: number of gray levels (default 256)
+    Returns: mean, variance, r, skewness, uniformity, entropy
+    """
+    hist = np.histogram(roi, bins=L, range=(0, L), density=True)
+    hist = hist[0].reshape(1, -1)
+
+    mean = 0
+    uniformity = 0.0
+    entropy = 0.0
+    for i in range(0, L):
+        mean += float(i) * hist[0][i]
+        uniformity += hist[0][i] ** 2
+        entropy += -hist[0][i] * np.log2(hist[0][i] + 1e-6)  # Avoid log(0)
+
+    # Moments
+    m = np.zeros(5)
+    for n in range(0, 5):
+        for z1 in range(0, L):
+            m[n] += (float(z1) - mean) ** n * hist[0][z1]
+
+    variance = m[2]
+    norm_variance = variance / ((L - 1) ** 2)
+    r = 1 - (1 / (1 + norm_variance))
+    skewness = m[3]
+    flatness = m[4]
+
+    return mean, variance, r, skewness, uniformity, entropy
     
-def find_sign_contours(mask, min_area=300, max_area=100000, enforce_circle=False, triangle_friendly=True):
-    """
-    Finds and filters contours from the red mask.
-    - If `enforce_circle` is True, filters only near-circular contours.
-    """
+def find_sign_contours(mask, min_area=300, max_area=100000):
     contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     print(f"🔍 Found {len(contours)} contours before filtering.")
 
@@ -155,100 +189,90 @@ def find_sign_contours(mask, min_area=300, max_area=100000, enforce_circle=False
         if not (min_area < area < max_area):
             continue
 
-        # Basic shape metrics
         x, y, w, h = cv2.boundingRect(cnt)
         aspect_ratio = w / float(h)
         perimeter = cv2.arcLength(cnt, True)
         circularity = (4 * np.pi * area) / (perimeter ** 2) if perimeter > 0 else 0
-
-        # Convexity check (optional)
         hull_area = cv2.contourArea(cv2.convexHull(cnt))
         solidity = area / hull_area if hull_area > 0 else 0
-         # DEBUG: Print key contour stats
         print(f"➕ Area: {area:.1f}, Circ: {circularity:.2f}, Sol: {solidity:.2f}, AR: {aspect_ratio:.2f}")
 
-        # ---- Filtering Conditions ----
-        if enforce_circle:
-            if 0.9 <= aspect_ratio <= 1.1 and circularity > 0.8 and solidity > 0.85 and min_area < area < max_area:
-                valid_contours.append(cnt)
-        else:
-            # Triangle-friendly logic (relax constraints for hollow signs)
-            if triangle_friendly:
-                if area > 100 and solidity > 0.6:
-                    valid_contours.append(cnt)
-            else:
-                if min_area < area < max_area and solidity > 0.8:
-                    valid_contours.append(cnt)
 
+        if solidity > 0.6 and area > 600 and 0.3 < aspect_ratio < 2.5:
+            valid_contours.append(cnt)
+    
     print(f"✅ {len(valid_contours)} valid contours remaining after filtering.")
     return valid_contours
 
-def identify_sign(image, contour, shape):
-    """Identifies the sign based on shape and internal content, and assigns a sign number."""
-    
-    combined_mask = detect_colour_signs(image)
+
+def identify_sign(image, contour, shape, combined_mask):
+
+    # Fallback shape override
+    if shape == "unknown":
+        area = cv2.contourArea(contour)
+        perimeter = cv2.arcLength(contour, True)
+        circularity = (4 * np.pi * area) / (perimeter ** 2) if perimeter > 0 else 0
+        x, y, w, h = cv2.boundingRect(contour)
+        aspect_ratio = w / float(h)
+        if 0.7 < aspect_ratio < 1.3 and circularity > 0.3:
+            print("⚠️ Shape fallback override: treating as 'circle'")
+            shape = "circle"
 
     # Crop bounding box of detected sign
     x, y, w, h = cv2.boundingRect(contour)
     cropped_sign = image[y:y+h, x:x+w]
     cropped_mask = combined_mask[y:y+h, x:x+w]
 
-    # Calculate red ratio inside the sign's bounding box (localized)
+    # Calculate red ratio
     red_area = cv2.countNonZero(cropped_mask)
     roi_area = w * h
     red_ratio = red_area / roi_area if roi_area > 0 else 0
-
     print(f"🔎 Shape: '{shape}', 🔴 Local Red Ratio: {red_ratio:.2f}")
 
-    if red_ratio > 0.02:
-    # ✅ TRIANGLE SIGNS
-        if shape == "triangle":
-            return "double bend", SIGN_NUMBERS["double bend"]
-    # ✅ STOP SIGN (Red + Octagon)
-        if shape == "octagon":
-            return "stop", SIGN_NUMBERS["stop"]
+    # Convert to grayscale for texture analysis
+    gray = cv2.cvtColor(cropped_sign, cv2.COLOR_BGR2GRAY)
+    gray_blurred = cv2.GaussianBlur(gray, (3, 3), 0)
 
-        # ✅ Speed Limits or No Entry (Red + Circle)
-        if shape == "circle":
-            # Convert cropped sign to grayscale and binarize
-            gray = cv2.cvtColor(cropped_sign, cv2.COLOR_BGR2GRAY)
-            _, binary_thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    # 📊 GLCM Texture Features
+    contrast, correlation, energy, homogeneity = extract_glcm_features(gray_blurred)
+    print(f"📊 GLCM → Contrast: {contrast:.2f}, Correlation: {correlation:.2f}, Energy: {energy:.4f}, Homogeneity: {homogeneity:.2f}")
 
-            # Detect white regions (digits or bar)
-            number_contours, _ = cv2.findContours(binary_thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    if energy < 0.025 or homogeneity < 0.22:
+        mean, var, r, skew, uniformity, entropy = get_stats(gray)
+        print(f"📊 Backup Stats → Entropy: {entropy:.2f}, Uniformity: {uniformity:.2f}")
+        if entropy < 1.2 or uniformity > 0.9:
+            print("⚠️ Both texture checks suggest noise.")
+            return "unknown", -1
 
-            valid_contours = []
-            for cnt in number_contours:
-                area = cv2.contourArea(cnt)
-                x_, y_, w_, h_ = cv2.boundingRect(cnt)
-                if area > 100:  # filter small noise
-                    valid_contours.append(cnt)
+    if red_ratio < 0.05:
+        print("⚠️ Very low red ratio (likely not red).")     
+        
+    # Try SIFT template matching as a fallback
+    sift = cv2.SIFT_create()
+    kp2, des2 = sift.detectAndCompute(gray, None)
 
-            # ✅ NO ENTRY Detection (One horizontal bar)
-            if len(valid_contours) == 1:
-                x_, y_, w_, h_ = cv2.boundingRect(valid_contours[0])
-                aspect_ratio = w_ / h_
-                sign_center_y = cropped_sign.shape[0] // 2
-                bar_center_y = y_ + (h_ // 2)
-                vertical_position = abs(sign_center_y - bar_center_y) / h_
+    if des2 is None:
+        print("⚠️ No SIFT features found in candidate sign.")
+        return "unknown", -1
 
-                if aspect_ratio > 2.5 and vertical_position < 0.5:
-                    return "no entry", SIGN_NUMBERS["no entry"]
+    bf = cv2.BFMatcher()
+    best_match = None
+    best_score = 0
 
-            # ✅ SPEED LIMIT (Multiple digits)
-            num_digits = len(valid_contours)
-            print(f"🔢 Found {num_digits} valid digit/bar contours inside circle.")
+    for label, kp1, des1, _ in TEMPLATES:
+        if des1 is None:
+            continue
+        matches = bf.knnMatch(des1, des2, k=2)
+        # Lowe's ratio test
+        good = [m for match in matches if len(match) == 2 for m, n in [match] if m.distance < 0.6 * n.distance]
 
-            if num_digits == 1:
-                return "20MPH", SIGN_NUMBERS["20MPH"]
-            elif num_digits == 2:
-                return "30MPH", SIGN_NUMBERS["30MPH"]
-            elif num_digits == 3:
-                return "40MPH", SIGN_NUMBERS["40MPH"]
-            else:
-                return "50MPH", SIGN_NUMBERS["50MPH"]
+        if len(good) > best_score:
+            best_score = len(good)
+            best_match = label
 
-        # Fallback warning
-        print("⚠️ Red sign detected but shape/content unclear.")
+    if best_match and best_score > 10:  # You can tune this threshold
+        print(f"🧠 SIFT matched: {best_match} with {best_score} good matches.")
+        return best_match, SIGN_NUMBERS.get(best_match, -1)
 
+    print("⚠️ Red sign detected but shape/content unclear.")
     return "unknown", -1

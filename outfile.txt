@@ -1,4 +1,20 @@
-acw1_test_images/test_08.jpg, 18, 50MPH, 0.248500, 0.722646, 0.022279, 0.027990, 0, 0.0, 1.0
-acw1_test_images/test_08.jpg, 14, stop, 0.504713, 0.548982, 0.018852, 0.039440, 0, 0.0, 1.0
-acw1_test_images/test_08.jpg, 14, stop, 0.538132, 0.316794, 0.023993, 0.020356, 0, 0.0, 1.0
-
+acw1_test_images/test_03.jpg, -1, mini_roundabout, 0.390000, 0.441111, 0.392500, 0.540000, 0, 0.0, 1.0
+acw1_test_images/test_04.jpg, 17, 40MPH, 0.601488, 0.492000, 0.366712, 0.408000, 0, 0.0, 1.0
+acw1_test_images/test_06.jpg, -1, give_way, 0.885647, 0.704545, 0.219243, 0.590909, 0, 0.0, 1.0
+acw1_test_images/test_06.jpg, 18, 50MPH, 0.271293, 0.467914, 0.094637, 0.229947, 0, 0.0, 1.0
+acw1_test_images/test_06.jpg, -1, mini_roundabout, 0.670347, 0.405080, 0.264984, 0.457219, 0, 0.0, 1.0
+acw1_test_images/test_07.jpg, 16, 30MPH, 0.823126, 0.660287, 0.057587, 0.143541, 0, 0.0, 1.0
+acw1_test_images/test_07.jpg, 16, 30MPH, 0.749543, 0.647528, 0.065814, 0.130781, 0, 0.0, 1.0
+acw1_test_images/test_07.jpg, -1, mini_roundabout, 0.719835, 0.393142, 0.103291, 0.240829, 0, 0.0, 1.0
+acw1_test_images/test_08.jpg, -1, no_entry, 0.420737, 0.586514, 0.035990, 0.109415, 0, 0.0, 1.0
+acw1_test_images/test_08.jpg, -1, no_entry, 0.743359, 0.531170, 0.029991, 0.075064, 0, 0.0, 1.0
+acw1_test_images/test_08.jpg, 15, 20MPH, 0.446444, 0.283079, 0.054841, 0.113232, 0, 0.0, 1.0
+acw1_test_images/test_09.jpg, -1, slippery_road, 0.330000, 0.332692, 0.418000, 0.665385, 0, 0.0, 1.0
+acw1_test_images/test_010.jpg, -1, give_way, 0.307595, 0.452885, 0.384810, 0.625000, 0, 0.0, 1.0
+acw1_test_images/test_011.jpg, -1, no_entry, 0.853804, 0.887540, 0.083696, 0.069579, 0, 0.0, 1.0
+acw1_test_images/test_011.jpg, -1, no_entry, 0.899457, 0.563916, 0.201087, 0.156958, 0, 0.0, 1.0
+acw1_test_images/test_011.jpg, 5, roadworks, 0.358152, 0.413430, 0.322826, 0.283172, 0, 0.0, 1.0
+acw1_test_images/test_012.jpg, 14, stop, 0.500833, 0.541667, 0.401667, 0.396667, 0, 0.0, 1.0
+acw1_test_images/test_015.jpg, 16, 30MPH, 0.598000, 0.424000, 0.804000, 0.744000, 0, 0.0, 1.0
+acw1_test_images/test_019.jpg, 16, 30MPH, 0.449219, 0.555324, 0.082812, 0.104384, 0, 0.0, 1.0
+acw1_test_images/test_019.jpg, 16, 30MPH, 0.541406, 0.553236, 0.082812, 0.104384, 0, 0.0, 1.0

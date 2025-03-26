@@ -24,14 +24,13 @@ def process_single_image(image_path, output_filename):
     cv2.imshow("Debug - Normalized Brightness", normalized_image)
     cv2.waitKey(0)
 
-    # Step 2: Detect Red Signs (HSV Masking)
-    combined_mask = detect_colour_signs(normalized_image)
-    cv2.imshow("Debug - Raw Mask", combined_mask)
+    red_mask, blue_mask = detect_colour_signs(normalized_image)
+    combined_mask = cv2.bitwise_or(red_mask, blue_mask)
+    cv2.imshow("Debug - Combined Red + Blue Mask", combined_mask)
     cv2.waitKey(0)
 
     # Step 3: Find & Filter Contours
-    expect_circular = True  # Set dynamically if needed
-    valid_contours = find_sign_contours(combined_mask, enforce_circle=False, triangle_friendly=True)
+    valid_contours = find_sign_contours(combined_mask)
     if not valid_contours:
         print("⚠️ No valid contours detected.")
         return      
@@ -39,7 +38,7 @@ def process_single_image(image_path, output_filename):
     # Step 4: Identify Shapes & Recognize Signs
     for idx, cnt in enumerate(valid_contours):
         shape = detect_shape(cnt, normalized_image)  # FIXED ✅
-        sign_name, sign_number = identify_sign(normalized_image, cnt, shape)  # FIXED ✅
+        sign_name, sign_number = identify_sign(normalized_image, cnt, shape, combined_mask)  # FIXED ✅
 
         if sign_name != "unknown":
             print(f"✅ Detected: {sign_name} (#{sign_number}) - Shape: {shape}")

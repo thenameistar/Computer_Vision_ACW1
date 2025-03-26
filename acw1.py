@@ -3,11 +3,9 @@ import os
 import image_processing
 import video_processing
 
-DEBUG = True  # Set to False to reduce console output
 
 def main():
-    if DEBUG:
-        print("✅ Script started")  # Verifying execution
+    print("✅ Script started")  # Verifying execution
 
     parser = argparse.ArgumentParser(description="Traffic Sign Detection")
     parser.add_argument("--image", help="Path to a single image file")
