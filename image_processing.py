@@ -3,7 +3,7 @@ import os
 import numpy as np
 from image_utils import (
     normalise_brightness,
-    detect_red_signs,
+    detect_colour_signs,
     identify_sign,
     detect_shape,
     find_sign_contours
@@ -25,14 +25,13 @@ def process_single_image(image_path, output_filename):
     cv2.waitKey(0)
 
     # Step 2: Detect Red Signs (HSV Masking)
-    red_mask = detect_red_signs(normalized_image)  # FIXED ✅
-    cv2.imshow("Debug - Raw Red Mask", red_mask)
+    combined_mask = detect_colour_signs(normalized_image)
+    cv2.imshow("Debug - Raw Mask", combined_mask)
     cv2.waitKey(0)
 
     # Step 3: Find & Filter Contours
     expect_circular = True  # Set dynamically if needed
-    valid_contours = find_sign_contours(red_mask, min_area=300, max_area=100000, enforce_circle=expect_circular)
-
+    valid_contours = find_sign_contours(combined_mask, enforce_circle=False, triangle_friendly=True)
     if not valid_contours:
         print("⚠️ No valid contours detected.")
         return      
